@@ -42,7 +42,7 @@ func main() {
 
 `Lookup(input string) (Area, bool)` 采用 Go 的 `value, ok` 约定。格式不符或未收录时返回零值和 `false`。三个 JSON 字段始终存在，没有对应层级时值为 `""`，如北京市的 `city`、东莞市的 `district`。
 
-`main` 还接受 15 位或 18 位号码：6 位和 15 位须全为 ASCII 数字，18 位的前 17 位须为 ASCII 数字，末位可为数字或 `X`/`x`。只取前 6 位查区划，不校验出生日期或校验位。`v0.1.0` 只接受 6 位码；可用 `go get github.com/jimyag/cn-idcard-area@main` 试用开发版。
+`main` 还接受 15 位或 18 位号码：6 位和 15 位须全为 ASCII 数字，18 位的前 17 位须为 ASCII 数字，末位可为数字或 `X`/`x`。只取前 6 位查区划，不校验出生日期或校验位。`v0.1.0` 只接受 6 位码；要试用新格式，可把库或命令安装路径中的 `@v0.1.0` 换成包含该改动的 `@c5dfe79de994`。
 
 同一码有多条记录时，取启用年份最新的一条。已撤销的 `110103` 仍返回原崇文区。结果对应地址码的行政区划，不能确定现住址，也不能用来判断身份证是否有效。
 
@@ -57,7 +57,7 @@ cn-idcard-area 110103
 {"province":"北京市","city":"","district":"崇文区"}
 ```
 
-命令只接受一个参数，与安装版本的 `Lookup` 使用同样的输入格式。未收录的码输出 `未知`；参数不合法时输出用法并以状态码 2 退出。要试用 15 或 18 位输入，可把安装命令里的 `@v0.1.0` 换成 `@main`。
+命令只接受一个参数，与安装版本的 `Lookup` 使用同样的输入格式。未收录的码输出 `未知`；参数不合法时输出用法并以状态码 2 退出。
 
 也可以从 [GitHub Releases](https://github.com/jimyag/cn-idcard-area/releases) 下载 Linux、macOS（darwin）、Windows 的 amd64 或 arm64 二进制。Linux 和 macOS 下载后用 `chmod +x` 添加执行权限。
 
