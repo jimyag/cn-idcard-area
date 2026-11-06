@@ -1,16 +1,18 @@
 # cn-idcard-area
 
-在 Go 程序中，用中国大陆身份证号码的前 6 位离线查省、市、区县。JSON 码表随包嵌入，无需联网、加载数据文件或安装第三方 Go 模块。
+用中国大陆身份证的地址码离线查省、市、区县。码表内置，无第三方 Go 依赖。
 
-需要 Go 1.16 或更高版本。
+最低 Go 版本见 [go.mod](go.mod)。
 
 ## Go 包
 
-在调用方模块中添加固定版本的依赖：
+在项目的 Go 模块中运行：
 
 ```sh
-go get github.com/jimyag/cn-idcard-area@v0.1.0
+go get github.com/jimyag/cn-idcard-area@latest
 ```
+
+要固定版本，把 `@latest` 换成所需的[发布标签](https://github.com/jimyag/cn-idcard-area/releases)。
 
 ```go
 package main
@@ -40,16 +42,16 @@ func main() {
 {"province":"广东省","city":"深圳市","district":"南山区"}
 ```
 
-`Lookup(input string) (Area, bool)` 采用 Go 的 `value, ok` 约定。格式不符或未收录时返回零值和 `false`。如果内置码表无法加载，查询也返回 `false`，调用方可用 `idcardarea.DataError()` 获取加载错误。三个 JSON 字段始终存在，没有对应层级时值为 `""`，如北京市的 `city`、东莞市的 `district`。
+`Lookup` 只用前 6 位查表。旧码仍可查，同一码取启用年份最新的记录。没有对应区划层级的字段为空字符串。
 
-`main` 还接受 15 位或 18 位号码：6 位和 15 位须全为 ASCII 数字，18 位的前 17 位须为 ASCII 数字，末位可为数字或 `X`/`x`。只取前 6 位查区划，不校验出生日期或校验位。`v0.1.0` 只接受 6 位码；要试用新格式，可把库或命令安装路径中的 `@v0.1.0` 换成相应的提交号。
+直接传 6 位地址码。支持完整号码的版本也接受 15 位和 18 位输入：只允许 ASCII 数字，18 位的末位也可以是 `X` 或 `x`。查询不校验出生日期或校验位，结果不能用来确定现住址。
 
-同一码有多条记录时，取启用年份最新的一条。已撤销的 `110103` 仍返回原崇文区。结果对应地址码的行政区划，不能确定现住址，也不能用来判断身份证是否有效。
+输入格式错误或查不到时，`Lookup` 返回 `Area{}, false`。如果所用版本提供 `DataError`，可调用它查看码表加载错误。
 
 ## 命令行
 
 ```sh
-go install github.com/jimyag/cn-idcard-area/cmd/cn-idcard-area@v0.1.0
+go install github.com/jimyag/cn-idcard-area/cmd/cn-idcard-area@latest
 cn-idcard-area 110103
 ```
 
@@ -57,14 +59,14 @@ cn-idcard-area 110103
 {"province":"北京市","city":"","district":"崇文区"}
 ```
 
-命令只接受一个参数，与安装版本的 `Lookup` 使用同样的输入格式。未收录的码输出 `未知`；参数不合法时输出用法并以状态码 2 退出。若内置码表无法加载，命令输出错误并以状态码 1 退出。
+命令只收一个参数，格式同 `Lookup`。查不到时输出 `未知`；参数错误时打印用法并退出 2。
 
-也可以从 [GitHub Releases](https://github.com/jimyag/cn-idcard-area/releases) 下载 Linux、macOS（darwin）、Windows 的 amd64 或 arm64 二进制。Linux 和 macOS 下载后用 `chmod +x` 添加执行权限。
+[GitHub Releases](https://github.com/jimyag/cn-idcard-area/releases) 提供 Linux、macOS（darwin）和 Windows 的 amd64、arm64 可执行文件。Linux 和 macOS 下载后用 `chmod +x` 添加执行权限。
 
-推送 `v主.次.修订` 标签后，[发布工作流](https://github.com/jimyag/cn-idcard-area/actions/workflows/release.yml)会测试、构建六个原始二进制，再创建 GitHub Release。已有 release 可在 Actions 里手动运行工作流，填原标签以补齐缺少的附件。
+推送 `vX.Y.Z` 标签会触发[测试、构建和发布](https://github.com/jimyag/cn-idcard-area/actions/workflows/release.yml)。已有 Release 可手动运行发布工作流，填原标签补附件。
 
 ## 数据和许可
 
-代码和文档采用 [MIT 许可证](LICENSE)。内置码表来自 [yescallop/areacodes](https://github.com/yescallop/areacodes) 的 `codes.json`，继续采用 [CC0 1.0](data/LICENSE)。保留上游区划树、代码、名称和启用年份，[data/SOURCE](data/SOURCE) 记录数据来源和最近成功检查的月份。
+代码和文档采用 [MIT](LICENSE)。码表来自 [yescallop/areacodes](https://github.com/yescallop/areacodes) 的 `codes.json`，采用 [CC0](data/LICENSE)。[data/SOURCE](data/SOURCE) 记录来源和最近核验月份。
 
-[同步工作流](https://github.com/jimyag/cn-idcard-area/actions/workflows/sync-areacodes.yml)每周一 10:17（UTC+8）检查上游，也可手动运行。工作流用托管 runner 的 `jq` 提取查询数据，核对上游许可证并通过 `go test ./...` 后才写入 `main`。没有变更时每月记录一次成功检查，避免公开仓库因[长期无活动停用定时任务](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)。
+[码表同步](https://github.com/jimyag/cn-idcard-area/actions/workflows/sync-areacodes.yml)每周一 10:17（UTC+8）运行，也可手动触发。许可一致且测试通过才更新码表。数据不变时，每月只记一次核验，避免[定时任务因长期无活动停用](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)。
