@@ -48,10 +48,35 @@ func TestLookup(t *testing.T) {
 	}
 }
 
+func TestLookupIDNumber(t *testing.T) {
+	want := idcardarea.Area{
+		Province: "广东省",
+		City:     "深圳市",
+		District: "南山区",
+	}
+	for _, input := range []string{
+		"440305" + "000000000",
+		"440305" + "000000000000",
+		"440305" + "00000000000X",
+		"440305" + "00000000000x",
+	} {
+		if got, ok := idcardarea.Lookup(input); !ok || got != want {
+			t.Errorf("Lookup(%q) = (%+v, %t), want (%+v, true)", input, got, ok, want)
+		}
+	}
+}
+
 func TestLookupMissing(t *testing.T) {
-	for _, prefix := range []string{"999999", "000000", "", "44030", "44030x", "４４", "111111111111111111"} {
-		if got, ok := idcardarea.Lookup(prefix); ok || got != (idcardarea.Area{}) {
-			t.Errorf("Lookup(%q) = (%+v, %t), want zero Area and false", prefix, got, ok)
+	for _, input := range []string{
+		"999999", "000000", "", "44030", "44030x", "４４",
+		"999999" + "00000000000X",
+		"440305" + "00000000X",
+		"440305" + "0000000000",
+		"440305" + "X00000000000",
+		"440305" + "00000000000Y",
+	} {
+		if got, ok := idcardarea.Lookup(input); ok || got != (idcardarea.Area{}) {
+			t.Errorf("Lookup(%q) = (%+v, %t), want zero Area and false", input, got, ok)
 		}
 	}
 }

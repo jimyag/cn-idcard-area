@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+
+	"github.com/jimyag/cn-idcard-area/internal/addresscode"
 )
 
 // Area contains the administrative divisions associated with an address code.
@@ -16,15 +18,16 @@ type Area struct {
 	District string `json:"district"`
 }
 
-// Lookup finds the area for a six-digit address code (the first six digits of
-// an ID number). It returns the latest record by start year, including retired
-// codes under their historical names. For an invalid or unknown code, it
-// returns the zero Area and false. Lookup is safe for concurrent use.
-func Lookup(prefix string) (Area, bool) {
-	if len(prefix) != 6 {
-		return Area{}, false
+// Lookup finds the area for a six-digit address code or a 15- or 18-character
+// ID number. It checks the input format but does not verify the birth date or
+// checksum. It returns the latest record by start year, including retired
+// codes under their historical names. Invalid or unknown inputs return the
+// zero Area and false. Lookup is safe for concurrent use.
+func Lookup(input string) (Area, bool) {
+	if len(input) != 6 {
+		input = addresscode.Prefix(input)
 	}
-	record, ok := areaIndex[prefix]
+	record, ok := areaIndex[input]
 	return record.area, ok
 }
 

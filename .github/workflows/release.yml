@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to add missing binaries to
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: >-
+      github.repository == 'jimyag/cn-idcard-area' && !github.event.deleted &&
+      (github.event_name == 'push' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - name: Validate tag
+        shell: bash
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Expected a version tag like v0.1.0" >&2
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', env.RELEASE_TAG) || '' }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+          cache: false
+      - name: Test and build binaries
+        shell: bash
+        run: |
+          go test -mod=readonly -race ./...
+          # Keep generated files out of the source status stamped into the binaries.
+          printf '\n/tmp/\n' >> .git/info/exclude
+          mkdir -p tmp/release
+          for os in linux darwin windows; do
+            suffix=
+            if [[ "$os" == windows ]]; then
+              suffix=.exe
+            fi
+            for arch in amd64 arm64; do
+              CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
+                go build -mod=readonly -trimpath -buildvcs=true \
+                -o "tmp/release/cn-idcard-area-$os-$arch$suffix" ./cmd/cn-idcard-area
+            done
+          done
+          tmp/release/cn-idcard-area-linux-amd64 440305
+      - name: Publish binaries
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          local_tag="$(git rev-parse "refs/tags/$RELEASE_TAG")"
+          remote_tag="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq .object.sha)"
+          if [[ "$local_tag" != "$remote_tag" ]]; then
+            echo "Release tag moved during the build" >&2
+            exit 1
+          fi
+
+          assets=(tmp/release/cn-idcard-area-*)
+          if [[ "$GITHUB_EVENT_NAME" == push ]]; then
+            gh release create "$RELEASE_TAG" "${assets[@]}" --repo "$GITHUB_REPOSITORY" \
+              --verify-tag --generate-notes
+            exit 0
+          fi
+
+          existing="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          missing=()
+          for asset in "${assets[@]}"; do
+            if ! grep -Fxq -- "${asset##*/}" <<< "$existing"; then
+              missing+=("$asset")
+            fi
+          done
+          if ((${#missing[@]})); then
+            gh release upload "$RELEASE_TAG" "${missing[@]}" --repo "$GITHUB_REPOSITORY"
+          else
+            echo "All binaries are already attached"
+          fi
