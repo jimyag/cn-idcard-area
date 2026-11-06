@@ -36,7 +36,7 @@ jobs:
           fi
 
           mkdir -p tmp/areacodes
-          for file in LICENSE result.csv; do
+          for file in LICENSE codes.json; do
             curl -fsS --max-time 60 --output "tmp/areacodes/$file" \
               "https://raw.githubusercontent.com/yescallop/areacodes/$upstream_sha/$file"
           done
@@ -45,17 +45,19 @@ jobs:
             exit 1
           fi
 
+          jq -ce '.items | walk(if type == "object" then del(.end, .succ) else . end)' \
+            tmp/areacodes/codes.json > tmp/areacodes/areas.json
           source_url="$(head -n 1 data/SOURCE)"
-          if ! cmp -s data/result.csv tmp/areacodes/result.csv; then
-            cp tmp/areacodes/result.csv data/result.csv
-            source_url="https://github.com/yescallop/areacodes/blob/$upstream_sha/result.csv"
+          if ! cmp -s data/areas.json tmp/areacodes/areas.json; then
+            cp tmp/areacodes/areas.json data/areas.json
+            source_url="https://github.com/yescallop/areacodes/blob/$upstream_sha/codes.json"
           fi
           go test ./...
 
           # Record one successful check per month so the public schedule stays active.
           checked_month="$(date -u +%Y-%m)"
           printf '%s\nChecked month (UTC): %s\n' "$source_url" "$checked_month" > data/SOURCE
-          git add -- data/result.csv data/SOURCE
+          git add -- data/areas.json data/SOURCE
           if git diff --cached --quiet; then
             echo "Data and monthly check are already current"
             exit 0
