@@ -4,6 +4,7 @@ package idcardarea
 import (
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -22,7 +23,8 @@ type Area struct {
 // ID number. It checks the input format but does not verify the birth date or
 // checksum. It returns the latest record by start year, including retired
 // codes under their historical names. Invalid or unknown inputs return the
-// zero Area and false. Lookup is safe for concurrent use.
+// zero Area and false, as does unavailable area data. See DataError to check
+// whether the embedded data loaded successfully. Lookup is safe for concurrent use.
 func Lookup(input string) (Area, bool) {
 	if len(input) != 6 {
 		input = addresscode.Prefix(input)
@@ -31,10 +33,15 @@ func Lookup(input string) (Area, bool) {
 	return record.area, ok
 }
 
+// DataError reports the error loading the embedded area data, or nil on success.
+func DataError() error {
+	return areaDataErr
+}
+
 //go:embed data/areas.json
 var areaJSON []byte
 
-var areaIndex = loadIndex()
+var areaIndex, areaDataErr = loadIndex(areaJSON)
 
 type areaNode struct {
 	Code     int        `json:"code"`
@@ -48,24 +55,26 @@ type areaRecord struct {
 	start int
 }
 
-func loadIndex() map[string]areaRecord {
+func loadIndex(data []byte) (map[string]areaRecord, error) {
 	var nodes []areaNode
-	if err := json.Unmarshal(areaJSON, &nodes); err != nil {
-		panic(fmt.Errorf("idcardarea: decode embedded area data: %w", err))
+	if err := json.Unmarshal(data, &nodes); err != nil {
+		return nil, fmt.Errorf("idcardarea: decode embedded area data: %w", err)
 	}
 	if len(nodes) == 0 {
-		panic("idcardarea: empty embedded area data")
+		return nil, errors.New("idcardarea: empty embedded area data")
 	}
 	index := make(map[string]areaRecord)
-	indexNodes(index, 0, Area{}, nodes)
-	return index
+	if err := indexNodes(index, 0, Area{}, nodes); err != nil {
+		return nil, err
+	}
+	return index, nil
 }
 
-func indexNodes(index map[string]areaRecord, parentCode int, parent Area, nodes []areaNode) {
+func indexNodes(index map[string]areaRecord, parentCode int, parent Area, nodes []areaNode) error {
 	for _, node := range nodes {
 		code := node.Code
 		if code < 100_000 || code > 999_999 || node.Name == "" || node.Start <= 0 {
-			panic(fmt.Sprintf("idcardarea: invalid embedded record for code %d", code))
+			return fmt.Errorf("idcardarea: invalid embedded record for code %d", code)
 		}
 		provinceCode, cityCode := code/10_000*10_000, code/100*100
 		area := parent
@@ -78,7 +87,7 @@ func indexNodes(index map[string]areaRecord, parentCode int, parent Area, nodes 
 			// Counties directly under a province have no prefecture-level city.
 			area.District = node.Name
 		default:
-			panic(fmt.Sprintf("idcardarea: invalid parent %d for code %d", parentCode, code))
+			return fmt.Errorf("idcardarea: invalid parent %d for code %d", parentCode, code)
 		}
 		key := strconv.Itoa(code)
 		if node.Start > index[key].start {
@@ -87,6 +96,9 @@ func indexNodes(index map[string]areaRecord, parentCode int, parent Area, nodes 
 				start: node.Start,
 			}
 		}
-		indexNodes(index, code, area, node.Children)
+		if err := indexNodes(index, code, area, node.Children); err != nil {
+			return err
+		}
 	}
+	return nil
 }

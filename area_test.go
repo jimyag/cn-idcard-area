@@ -2,6 +2,7 @@ package idcardarea_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 
@@ -87,7 +88,7 @@ func ExampleLookup() {
 		return
 	}
 	if err := json.NewEncoder(os.Stdout).Encode(area); err != nil {
-		panic(err)
+		fmt.Println(err)
 	}
 	// Output: {"province":"北京市","city":"","district":"崇文区"}
 }

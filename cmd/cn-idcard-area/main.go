@@ -23,6 +23,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "usage: cn-idcard-area <6-digit code or 15-/18-character ID number>")
 		return 2
 	}
+	if err := idcardarea.DataError(); err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
 
 	area, ok := idcardarea.Lookup(code)
 	var err error
