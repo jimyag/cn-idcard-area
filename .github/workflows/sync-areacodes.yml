@@ -1,0 +1,67 @@
+name: Sync areacodes
+
+on:
+  schedule:
+    - cron: "17 2 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: sync-areacodes
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository == 'jimyag/cn-idcard-area' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Verify and publish the data snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          upstream_ref="$(git ls-remote --exit-code https://github.com/yescallop/areacodes.git HEAD)"
+          upstream_sha="${upstream_ref%%$'\t'*}"
+          if [[ ! "$upstream_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Could not resolve the upstream commit" >&2
+            exit 1
+          fi
+
+          mkdir -p tmp/areacodes
+          for file in LICENSE result.csv; do
+            curl -fsS --max-time 60 --output "tmp/areacodes/$file" \
+              "https://raw.githubusercontent.com/yescallop/areacodes/$upstream_sha/$file"
+          done
+          if ! cmp -s data/LICENSE tmp/areacodes/LICENSE; then
+            echo "Upstream license changed; review it before updating the data" >&2
+            exit 1
+          fi
+
+          source_url="$(head -n 1 data/SOURCE)"
+          if ! cmp -s data/result.csv tmp/areacodes/result.csv; then
+            cp tmp/areacodes/result.csv data/result.csv
+            source_url="https://github.com/yescallop/areacodes/blob/$upstream_sha/result.csv"
+          fi
+          go test ./...
+
+          # Record one successful check per month so the public schedule stays active.
+          checked_month="$(date -u +%Y-%m)"
+          printf '%s\nChecked month (UTC): %s\n' "$source_url" "$checked_month" > data/SOURCE
+          git add -- data/result.csv data/SOURCE
+          if git diff --cached --quiet; then
+            echo "Data and monthly check are already current"
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -s -m 'chore(data): sync areacodes' \
+              -m 'Record the verified upstream snapshot and the month checked after go test ./... passed.'
+          git push origin HEAD:refs/heads/main
