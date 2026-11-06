@@ -38,6 +38,7 @@ func TestLookup(t *testing.T) {
 		},
 		"440000": {Province: "广东省"},
 	} {
+		prefix, want := prefix, want
 		t.Run(prefix, func(t *testing.T) {
 			t.Parallel()
 			if got, ok := idcardarea.Lookup(prefix); !ok || got != want {

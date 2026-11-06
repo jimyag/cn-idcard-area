@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"sync"
 )
 
 // Area contains the administrative divisions associated with an address code.
@@ -25,14 +24,14 @@ func Lookup(prefix string) (Area, bool) {
 	if len(prefix) != 6 {
 		return Area{}, false
 	}
-	record, ok := areaIndex()[prefix]
+	record, ok := areaIndex[prefix]
 	return record.area, ok
 }
 
 //go:embed data/areas.json
 var areaJSON []byte
 
-var areaIndex = sync.OnceValue(loadIndex)
+var areaIndex = loadIndex()
 
 type areaNode struct {
 	Code     int        `json:"code"`
